@@ -85,6 +85,64 @@ https://gist.github.com/883575
 Resource Request (request both for resource owner resource and for client resource)
 https://gist.github.com/933885
 
+=== An example client in rails app
+
+  #./config/initializers/rack-oauth.rb
+  Rack::OAuth2.http_config do |http_client|
+    http_client.ssl_config.set_client_cert_file client_cert_path, client_key_path
+    http_client.ssl_config.set_trust_ca trust_ca_file_or_hashed_dir
+    http_client.ssl_config.add_trust_ca another_trust_ca_file_or_hashed_dir
+  end
+
+
+  #./controllers/concerns/oauth_client_requests.rb
+  module OauthClientRequests
+
+    private
+
+    def oauth_client
+      @oauth_client ||= Rack::OAuth2::Client.new oauth_client_options
+    end
+
+    def oauth_client_options
+    # change to however you store your configuration - client_id and client_secret are provided by the oauth2 server,
+    # where you registered your Application/Client
+      {
+          identifier: MyApp::Config.oauth.client_id,
+          secret: MyApp::Config.oauth.client_secret,
+          redirect_uri: MyApp::Config.oauth.redirect_uri,
+          host: MyApp::Config.oauth.host,
+          port: MyApp::Config.oauth.port,
+          scheme: MyApp::Config.oauth.scheme,
+          authorization_endpoint: '/oauth/authorize',
+          token_endpoint: '/oauth/token'
+      }
+    end
+
+    def url_for_protected(path)
+      File.join(MyApp::Config.protected_server.uri, path)
+    end
+
+    def client_token
+      oauth_client.access_token!
+    end
+  end
+
+Now you can include this module in any controller and make requests like:
+
+  client_token.get url_for_protected('/protected_resource')
+  client_token.post url_for_protected('/protected_resource'), { name: 'new-resource' }
+
+It will make both requests - first to get a authorization token via client credentials grant, then a get or post request to the protected resource.
+
+Or if it is your main app for your own oauth2-server, you can make a resource owner password credentials grant request like:
+
+  oauth_client.resource_owner_credentials = params[:user][:login], params[:user][:password]
+  access_token = oauth_client.access_token!
+
+Or do a standard authorization grant request like:
+
+  redirect_to oauth_client.authorization_uri(:scope => :user_about_me)
 
 == Note on Patches/Pull Requests
 
